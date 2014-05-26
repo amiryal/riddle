@@ -503,7 +503,8 @@ module Riddle
     def open_socket
       raise "Already Connected" unless @socket.nil?
 
-      available_servers = servers.dup
+      available_servers = @servers
+      failed_servers = []
 
       if @timeout == 0
         @socket = initialise_connection(available_servers.first)
@@ -511,7 +512,6 @@ module Riddle
         begin
           Timeout.timeout(@timeout) { @socket = initialise_connection(available_servers.first) }
         rescue Timeout::Error, Riddle::ConnectionError => e
-          failed_servers ||= []
           failed_servers << available_servers.shift
           retry if !available_servers.empty?
 
@@ -522,6 +522,8 @@ module Riddle
           else
             raise e
           end
+        ensure
+          @servers = available_servers + failed_servers
         end
       end
 
