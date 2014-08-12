@@ -1,3 +1,5 @@
+require 'null_logger'
+
 require 'riddle/client/filter'
 require 'riddle/client/message'
 require 'riddle/client/response'
@@ -123,7 +125,7 @@ module Riddle
       :group_by, :group_function, :group_clause, :group_distinct, :cut_off,
       :retry_count, :retry_delay, :anchor, :index_weights, :rank_mode,
       :rank_expr, :max_query_time, :field_weights, :timeout, :overrides,
-      :select, :connection, :key
+      :select, :connection, :key, :logger
     attr_reader :queue
 
     @@connection = nil
@@ -141,13 +143,15 @@ module Riddle
     # Can instantiate with a specific server and port - otherwise it assumes
     # defaults of localhost and 9312 respectively. All other settings can be
     # accessed and changed via the attribute accessors.
-    def initialize(servers = nil, port = nil, key = nil)
+    def initialize(servers = nil, port = nil, key = nil, logger:nil)
       Riddle.version_warning
 
       @servers = Array(servers || "localhost")
       @port   = port || 9312
       @socket = nil
       @key    = key
+
+      self.logger = logger || NullLogger.instance
 
       reset
 
@@ -508,11 +512,15 @@ module Riddle
 
       if @timeout == 0
         @socket = initialise_connection(available_servers.first)
+        logger.info "Connected to #{available_servers.first}"
       else
         begin
           Timeout.timeout(@timeout) { @socket = initialise_connection(available_servers.first) }
+          logger.info "Connected to #{available_servers.first}"
         rescue Timeout::Error, Riddle::ConnectionError => e
           failed_servers << available_servers.shift
+          logger.warn "Connection to #{failed_servers.last} failed; " \
+            "trying next server."
           retry if !available_servers.empty?
 
           case e
